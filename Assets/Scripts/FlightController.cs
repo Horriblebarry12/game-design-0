@@ -36,7 +36,6 @@ public class FlightController : MonoBehaviour
 
     private void Update()
     {
-        
 
         Thrust += Controls.Aircraft.ThrottleAdjust.ReadValue<float>();
         Thrust = Mathf.Clamp(Thrust, 0, MaxThrust);

@@ -14,26 +14,72 @@ public class TerrainChuck : MonoBehaviour
 	public int Depth;
 	public void Generate() 
 	{
-		NativeArray<float> outputValues = new NativeArray<float>(Depth*Width*Height, Allocator.TempJob);
-		Debug.Log("created the funny!");
-		var job = new ValuesPopulator()
+		NativeArray<float> outputValues = new NativeArray<float>((Depth + 1)*(Width + 1)*(Height + 1), Allocator.TempJob);
+
+		NativeArray<int> tri = new NativeArray<int>((triTable.Length + 1) * triTable[0].Length, Allocator.TempJob);
+
+        for (int i = 0; i < triTable.Length; i++)
+        {
+			for (int j = 0; j < triTable[i].Length; j++) 
+			{
+				tri[i * triTable.Length +  j] = triTable[i][j];
+			}
+        }
+
+        ChunkInfo info = new ChunkInfo()
 		{
-			ChunkDimensions = new float3(Depth, Width, Height),
+			ChunkDimensions = new int3(Depth, Height, Width),
+			PositionOffset = new float3(transform.position.x, transform.position.y, transform.position.z),
+			Threshold = 0.5f,
+			edgeTable = new(edgeTable, Allocator.Persistent),
+			triTable = tri
+		};
+		var valuesGenerator = new ValuesPopulator()
+		{
+			Info = info,
 			OutputValues = outputValues
 		};
 
-		JobHandle jobHandle = job.Schedule(Depth * Width * Height, 32);
+		JobHandle valueJobHandle = valuesGenerator.Schedule(Depth * Width * Height, 32);
 
-		while (!jobHandle.IsCompleted) 
+		while (!valueJobHandle.IsCompleted) 
 		{
 		}
-		jobHandle.Complete();
+        valueJobHandle.Complete();
 		foreach (var value in outputValues)
 		{
 			Debug.Log(value);
 		}
 
+        NativeArray<NativeList<float3>> outputVerticies = new NativeArray<NativeList<float3>>(Depth * Width * Height, Allocator.TempJob);
+		NativeArray<NativeList<int>> outputTriangles = new NativeArray<NativeList<int>>(Depth * Width * Height, Allocator.TempJob);
+
+		var meshGenerator = new MeshGenerator()
+		{
+			Info = info,
+			InputValues = outputValues,
+			OutputTriangles = outputTriangles,
+			OutputVerticies = outputVerticies
+        };
+
+        JobHandle meshJobHandle = valuesGenerator.Schedule(Depth * Width * Height, 32);
+
+        while (!meshJobHandle.IsCompleted)
+        {
+        }
+        meshJobHandle.Complete();
+        foreach (var list in outputVerticies)
+        {
+            foreach (var vert in list) 
+			{
+				Debug.Log(vert);
+			}
+			list.Dispose();
+        }
+
+        outputValues.Dispose();
 		outputValues.Dispose();
+		outputTriangles.Dispose();
 	}
 
 	private void Start()
@@ -339,8 +385,8 @@ struct ChunkInfo
 	[ReadOnly] public int3 ChunkDimensions;
 	[ReadOnly] public float3 PositionOffset;
 
-	[ReadOnly] public int[] edgeTable;
-	[ReadOnly] public int[][] triTable;
+	[ReadOnly] public NativeArray<int> edgeTable;
+	[ReadOnly] public NativeArray<int> triTable;
 
 	[ReadOnly] public float Threshold;
 
@@ -348,7 +394,7 @@ struct ChunkInfo
 
 struct ValuesPopulator : IJobParallelFor 
 {
-	[ReadOnly] ChunkInfo Info;
+	[ReadOnly] public ChunkInfo Info;
 	int3 indexToPos(int i)
 	{
 		int3 ChunkDimensions = Info.ChunkDimensions + new int3(1);
@@ -381,7 +427,8 @@ struct MeshGenerator : IJobParallelFor
 	[ReadOnly] public ChunkInfo Info;
 	[ReadOnly] public NativeArray<float> InputValues;
 
-	public NativeArray<float3> OutputVerticies;
+	public NativeArray<NativeList<float3>> OutputVerticies;
+	public NativeArray<NativeList<int>> OutputTriangles;
 
 	int3 indexToPos(int i)
 	{
@@ -410,6 +457,9 @@ struct MeshGenerator : IJobParallelFor
 
 	public void Execute(int i) 
 	{
+		OutputVerticies[i] = new NativeList<float3>();
+		OutputTriangles[i] = new NativeList<int>();
+
 		int3 pos = indexToPos(i);
 
 		int cubeIndex = 0;
@@ -453,20 +503,20 @@ struct MeshGenerator : IJobParallelFor
 		if ((edges & 2048) != 0)
 			edgeVertex[11] = VertexInterpolate(pos[3], pos[7], InputValues[posToIndex(pos.x, pos.y + 1, pos.z)], InputValues[posToIndex(pos.x, pos.y + 1, pos.z + 1)], Info.Threshold);
 
-		for (int j = 0; Info.triTable[cubeIndex][j] != -1; j += 3)
+		for (int j = 0; Info.triTable[cubeIndex * 16 + j] != -1; j += 3)
 		{
-			int a = Info.triTable[cubeIndex][j];
-			int b = Info.triTable[cubeIndex][j + 1];
-			int c = Info.triTable[cubeIndex][j + 2];
+			int a = Info.triTable[cubeIndex * 16 + j];
+			int b = Info.triTable[cubeIndex * 16 + j + 1];
+			int c = Info.triTable[cubeIndex * 16 + j + 2];
 
 
-			OutputVerticies.Add(edgeVertex[a]);
-			OutputVerticies.Add(edgeVertex[b]);
-			OutputVerticies.Add(edgeVertex[c]);
+			OutputVerticies[i].Add(edgeVertex[a]);
+			OutputVerticies[i].Add(edgeVertex[b]);
+			OutputVerticies[i].Add(edgeVertex[c]);
 
-			triangles.Add(OutputVerticies.Count - 3);
-			triangles.Add(OutputVerticies.Count - 2);
-			triangles.Add(OutputVerticies.Count - 1);
+            OutputTriangles[i].Add(OutputVerticies[i].Length - 3);
+            OutputTriangles[i].Add(OutputVerticies[i].Length - 2);
+            OutputTriangles[i].Add(OutputVerticies[i].Length - 1);
 		}
 	}
 }
