@@ -14,9 +14,15 @@ public class TerrainChuck : MonoBehaviour
 	public int Width;
 	public int Height;
 	public int Depth;
+
+	public bool isGenerating = false;
+	public bool isDoneGenerating = false;
 	public IEnumerator Generate() 
 	{
-		NativeArray<float> outputValues = new NativeArray<float>((Depth + 1)*(Width + 1)*(Height + 1), Allocator.TempJob);
+		isGenerating = true;
+
+
+        NativeArray<float> outputValues = new NativeArray<float>((Depth + 1)*(Width + 1)*(Height + 1), Allocator.TempJob);
 
 		NativeArray<int> tri = new NativeArray<int>(triTable.Cast<int>().ToArray(), Allocator.TempJob);
 		NativeArray<int> edge = new NativeArray<int>(edgeTable, Allocator.TempJob);
@@ -68,23 +74,26 @@ public class TerrainChuck : MonoBehaviour
 		triangles.RemoveAll((int val) => { return val == -1; });
 
 		mesh.triangles = triangles.ToArray();
+		mesh.RecalculateNormals();
 		GetComponent<MeshFilter>().mesh = mesh;
+		GetComponent<MeshRenderer>().material = ChunkManager.instance.worldMaterial;
 		outputVerticies.Dispose();
         outputValues.Dispose();
 		outputTriangles.Dispose();
 		tri.Dispose();
 		edge.Dispose();
-	}
 
-	private void Start()
-	{
-	
-		StartCoroutine(Generate());
+		isGenerating = false;
+		isDoneGenerating = true;
 	}
 
 	private void OnDrawGizmos()
 	{
-		Gizmos.color = Color.green;
+		Gizmos.color = Color.white;
+		if (isGenerating)
+			Gizmos.color = Color.green;
+		if (isDoneGenerating)
+			Gizmos.color = Color.cyan;
 		Gizmos.DrawWireCube(new Vector3(Width, Height, Depth) / 2 + transform.position, new Vector3(Width, Height, Depth));
 	}
 

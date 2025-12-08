@@ -5,6 +5,10 @@ using UnityEngine;
 
 public class ChunkManager : MonoBehaviour
 {
+	public Material worldMaterial;
+
+	public static ChunkManager instance;
+
 	private void GenerateChunks(int radius) 
 	{
 		float x = 0.0f, y = 0.0f;
@@ -18,9 +22,19 @@ public class ChunkManager : MonoBehaviour
 			while (dist < distTravel)
 			{
 				dist++;
-				new GameObject(x + " " + y).transform.position = new Vector3(x, 0, y);
+                for (int z= -1; z < 1; z++)
+                {
+                    GameObject obj = new GameObject(x + " " + y);
+                    obj.transform.position = new Vector3(x * 32, z * 32, y * 32);
+                    TerrainChuck chunk = obj.AddComponent<TerrainChuck>();
+                    chunk.Depth = 32;
+                    chunk.Height = 32;
+                    chunk.Width = 32;
 
-				x += xDir;
+                    StartCoroutine(chunk.Generate());
+                }
+
+                x += xDir;
 				y += yDir;
 
 			}
@@ -40,6 +54,8 @@ public class ChunkManager : MonoBehaviour
 
 	private void Start()
 	{
-		GenerateChunks(10);
+		instance = this;
+
+        GenerateChunks(10);
 	}
 }
