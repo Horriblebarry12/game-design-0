@@ -6,11 +6,16 @@ using UnityEngine;
 public class ChunkManager : MonoBehaviour
 {
 	public Material worldMaterial;
-
+	public int MaxGeneratingChunks = 12;
+	public Transform Reference;
 	public static ChunkManager instance;
 
-	private void GenerateChunks(int radius) 
+	public Dictionary<Vector3, TerrainChunk> AllChunks = new Dictionary<Vector3, TerrainChunk>();
+
+	bool isGenerating = false;
+	private IEnumerator GenerateChunks(int radius) 
 	{
+		isGenerating = true;
 		float x = 0.0f, y = 0.0f;
 
 		float dist = 0.0f, xDir = 0.0f, yDir = 0.0f;
@@ -22,19 +27,31 @@ public class ChunkManager : MonoBehaviour
 			while (dist < distTravel)
 			{
 				dist++;
-                for (int z= -1; z < 1; z++)
+                for (int j= -1; j <= 1; j++)
                 {
+					Vector3 actuallPos = new Vector3((x+Mathf.Round((Reference.position.x)/32)) * 32, (j+Mathf.Round((Reference.position.y)/32)) * 32, (y + Mathf.Round((Reference.position.z) / 32)) * 32);
+					if (AllChunks.ContainsKey(actuallPos))
+						continue;
+					yield return new WaitWhile(() =>
+					{
+						int numGenerating = 0;
+						foreach (var item in AllChunks.Values)
+						{
+							if (item.isGenerating && !item.isDoneGenerating)
+								numGenerating++;
+						}
+						return numGenerating > MaxGeneratingChunks;
+					});
                     GameObject obj = new GameObject(x + " " + y);
-                    obj.transform.position = new Vector3(x * 32, z * 32, y * 32);
-                    TerrainChuck chunk = obj.AddComponent<TerrainChuck>();
+                    obj.transform.position = actuallPos;
+                    TerrainChunk chunk = obj.AddComponent<TerrainChunk>();
                     chunk.Depth = 32;
                     chunk.Height = 32;
                     chunk.Width = 32;
-
+					AllChunks.Add(actuallPos, chunk);
                     StartCoroutine(chunk.Generate());
                 }
-
-                x += xDir;
+				x += xDir;
 				y += yDir;
 
 			}
@@ -49,13 +66,19 @@ public class ChunkManager : MonoBehaviour
 				timeTraveled = 0;
 			}
 		}
-
+		isGenerating = false;
 	}
 
 	private void Start()
 	{
 		instance = this;
 
-        GenerateChunks(10);
+        StartCoroutine(GenerateChunks(10));
+	}
+
+	private void Update()
+	{
+		if (!isGenerating)
+			StartCoroutine(GenerateChunks(10));
 	}
 }

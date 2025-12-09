@@ -9,7 +9,7 @@ using Unity.Mathematics;
 using UnityEngine;
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
-public class TerrainChuck : MonoBehaviour
+public class TerrainChunk : MonoBehaviour
 {
 	public int Width;
 	public int Height;
@@ -56,32 +56,36 @@ public class TerrainChuck : MonoBehaviour
 			OutputVerticies = outputVerticies
         };
 		//meshGenerator.Run();
-		
-        JobHandle meshJobHandle = meshGenerator.Schedule(valueJobHandle);
+
+
+		JobHandle meshJobHandle = meshGenerator.Schedule(valueJobHandle);
 
 		yield return new WaitUntil(() => { return meshJobHandle.IsCompleted; });
 		meshJobHandle.Complete();
-		
-		Mesh mesh = new Mesh();
+		outputValues.Dispose();
+		tri.Dispose();
+		edge.Dispose();
 		float3[] verts = outputVerticies.AsArray().ToArray();
+		outputVerticies.Dispose();
+		List<int> triangles = new List<int>(outputTriangles.AsArray());
+		outputTriangles.Dispose();
+		Mesh mesh = new Mesh();
 		Vector3[] vertsVectors = new Vector3[verts.Length];
 		for (int i = 0; i < verts.Length; i++)
 		{
 			vertsVectors[i] = new Vector3(verts[i].x, verts[i].y, verts[i].z);
 		}
 		mesh.vertices = vertsVectors;
-		List<int> triangles = new List<int>(outputTriangles.AsArray());
+
+
 		triangles.RemoveAll((int val) => { return val == -1; });
 
 		mesh.triangles = triangles.ToArray();
 		mesh.RecalculateNormals();
 		GetComponent<MeshFilter>().mesh = mesh;
 		GetComponent<MeshRenderer>().material = ChunkManager.instance.worldMaterial;
-		outputVerticies.Dispose();
-        outputValues.Dispose();
-		outputTriangles.Dispose();
-		tri.Dispose();
-		edge.Dispose();
+
+
 
 		isGenerating = false;
 		isDoneGenerating = true;
