@@ -9,7 +9,7 @@ public class ChunkManager : MonoBehaviour
 	public int MaxGeneratingChunks = 12;
 	public Transform Reference;
 	public static ChunkManager instance;
-
+	public int numGenerating = 0;
 	public Dictionary<Vector3, TerrainChunk> AllChunks = new Dictionary<Vector3, TerrainChunk>();
 
 	bool isGenerating = false;
@@ -32,15 +32,9 @@ public class ChunkManager : MonoBehaviour
 					Vector3 actuallPos = new Vector3((x+Mathf.Round((Reference.position.x)/32)) * 32, (j+Mathf.Round((Reference.position.y)/32)) * 32, (y + Mathf.Round((Reference.position.z) / 32)) * 32);
 					if (AllChunks.ContainsKey(actuallPos))
 						continue;
-					yield return new WaitWhile(() =>
+					yield return new WaitUntil(() =>
 					{
-						int numGenerating = 0;
-						foreach (var item in AllChunks.Values)
-						{
-							if (item.isGenerating && !item.isDoneGenerating)
-								numGenerating++;
-						}
-						return numGenerating > MaxGeneratingChunks;
+						return numGenerating < MaxGeneratingChunks;
 					});
                     GameObject obj = new GameObject(x + " " + y);
                     obj.transform.position = actuallPos;
@@ -49,7 +43,6 @@ public class ChunkManager : MonoBehaviour
                     chunk.Height = 32;
                     chunk.Width = 32;
 					AllChunks.Add(actuallPos, chunk);
-                    StartCoroutine(chunk.Generate());
                 }
 				x += xDir;
 				y += yDir;

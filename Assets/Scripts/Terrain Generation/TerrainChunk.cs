@@ -17,11 +17,12 @@ public class TerrainChunk : MonoBehaviour
 
 	public bool isGenerating = false;
 	public bool isDoneGenerating = false;
+
 	public IEnumerator Generate() 
 	{
 		isGenerating = true;
-
-
+		ChunkManager.instance.numGenerating++;
+		
         NativeArray<float> outputValues = new NativeArray<float>((Depth + 1)*(Width + 1)*(Height + 1), Allocator.TempJob);
 
 		NativeArray<int> tri = new NativeArray<int>(triTable.Cast<int>().ToArray(), Allocator.TempJob);
@@ -56,7 +57,7 @@ public class TerrainChunk : MonoBehaviour
 			OutputVerticies = outputVerticies
         };
 		//meshGenerator.Run();
-
+		
 
 		JobHandle meshJobHandle = meshGenerator.Schedule(valueJobHandle);
 
@@ -89,9 +90,13 @@ public class TerrainChunk : MonoBehaviour
 
 		isGenerating = false;
 		isDoneGenerating = true;
-	}
-
-	private void OnDrawGizmos()
+        ChunkManager.instance.numGenerating--;
+    }
+    private void Start()
+    {
+		StartCoroutine(Generate());
+    }
+    private void OnDrawGizmos()
 	{
 		Gizmos.color = Color.white;
 		if (isGenerating)
@@ -395,8 +400,8 @@ public class TerrainChunk : MonoBehaviour
 		 {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}};
 	#endregion
 }
-[BurstCompile]
-struct ChunkInfo 
+[BurstCompile(CompileSynchronously = true, FloatMode = FloatMode.Fast, OptimizeFor = OptimizeFor.Performance)]
+public struct ChunkInfo 
 {
 	[ReadOnly] public int3 ChunkDimensions;
 	[ReadOnly] public float3 PositionOffset;
@@ -407,43 +412,10 @@ struct ChunkInfo
 	[ReadOnly] public float Threshold;
 
 }
-[BurstCompile]
-struct ValuesPopulator : IJobParallelFor 
-{
-	[ReadOnly] public ChunkInfo Info;
-	int3 indexToPos(int i)
-	{
-		int layerSize = (Info.ChunkDimensions.x + 1) * (Info.ChunkDimensions.y + 1);
-
-		int z = i / layerSize;
-		int remaining = i % layerSize;
-
-		int y = remaining / (Info.ChunkDimensions.x + 1);
-		int x = remaining % (Info.ChunkDimensions.x + 1);
-
-		return new int3(x, y, z);
-	}
-
-	int posToIndex(int3 pos)
-	{
-		return pos.x + Info.ChunkDimensions.x * (pos.y + Info.ChunkDimensions.y * pos.z);
-	}
-
-	public NativeArray<float> OutputValues;
-
-	public void Execute(int i) 
-	{
-		int3 pos = indexToPos(i) + (int3)Info.PositionOffset;
 
 
-
-		OutputValues[i] = noise.cnoise((float3)(pos + new int3(125678)) / 15.5f) * 32.0f - pos.y;
-		//OutputValues[i] = 16 - pos.y;
-	}
-}
-
-[BurstCompile]
-struct MeshGenerator : IJob
+[BurstCompile(CompileSynchronously = true, FloatMode = FloatMode.Fast, OptimizeFor = OptimizeFor.Performance)]
+public struct MeshGenerator : IJob
 {
 	[ReadOnly] public ChunkInfo Info;
 	[ReadOnly] public NativeArray<float> InputValues;
