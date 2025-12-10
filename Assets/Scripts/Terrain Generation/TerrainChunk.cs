@@ -92,7 +92,7 @@ public class TerrainChunk : MonoBehaviour
 		isDoneGenerating = true;
         ChunkManager.instance.numGenerating--;
     }
-    private void Start()
+    public void StartGenerating()
     {
 		StartCoroutine(Generate());
     }

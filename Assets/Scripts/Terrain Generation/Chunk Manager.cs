@@ -32,10 +32,8 @@ public class ChunkManager : MonoBehaviour
 					Vector3 actuallPos = new Vector3((x+Mathf.Round((Reference.position.x)/32)) * 32, (j+Mathf.Round((Reference.position.y)/32)) * 32, (y + Mathf.Round((Reference.position.z) / 32)) * 32);
 					if (AllChunks.ContainsKey(actuallPos))
 						continue;
-					yield return new WaitUntil(() =>
-					{
-						return numGenerating < MaxGeneratingChunks;
-					});
+					if (numGenerating > MaxGeneratingChunks)
+						yield return new WaitUntil(() => { return numGenerating < MaxGeneratingChunks; });
                     GameObject obj = new GameObject(x + " " + y);
                     obj.transform.position = actuallPos;
                     TerrainChunk chunk = obj.AddComponent<TerrainChunk>();
@@ -43,6 +41,7 @@ public class ChunkManager : MonoBehaviour
                     chunk.Height = 32;
                     chunk.Width = 32;
 					AllChunks.Add(actuallPos, chunk);
+					chunk.StartGenerating();
                 }
 				x += xDir;
 				y += yDir;
@@ -66,12 +65,16 @@ public class ChunkManager : MonoBehaviour
 	{
 		instance = this;
 
-        StartCoroutine(GenerateChunks(10));
-	}
+		StartCoroutine(GenerateChunks(10));
+		//GenerateChunks(10);
+
+    }
 
 	private void Update()
 	{
 		if (!isGenerating)
 			StartCoroutine(GenerateChunks(10));
-	}
+			//GenerateChunks(10);
+
+    }
 }
