@@ -1,18 +1,25 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Mathematics;
 using UnityEngine;
 
 public class ChunkManager : MonoBehaviour
 {
+	[Header("Settings")]
 	public Material worldMaterial;
 	public int MaxGeneratingChunks = 12;
 	public Transform Reference;
+	public bool RandomSeed = true;
+	public NoiseParamaters NoiseSettings;
+	
 	public static ChunkManager instance;
+	[Space]
+	[Header("Global References")]
+	public NoiseParamaters GlobalNoiseSettings;
 	public int numGenerating = 0;
 	public Dictionary<Vector3, TerrainChunk> AllChunks = new Dictionary<Vector3, TerrainChunk>();
-
-	bool isGenerating = false;
+    bool isGenerating = false;
 	private IEnumerator GenerateChunks(int radius) 
 	{
 		isGenerating = true;
@@ -27,7 +34,7 @@ public class ChunkManager : MonoBehaviour
 			while (dist < distTravel)
 			{
 				dist++;
-                for (int j= -1; j <= 1; j++)
+                for (int j= -1; j <= 5; j++)
                 {
 					Vector3 actuallPos = new Vector3((x+Mathf.Round((Reference.position.x)/32)) * 32, (j+Mathf.Round((Reference.position.y)/32)) * 32, (y + Mathf.Round((Reference.position.z) / 32)) * 32);
 					if (AllChunks.ContainsKey(actuallPos))
@@ -64,7 +71,8 @@ public class ChunkManager : MonoBehaviour
 	private void Start()
 	{
 		instance = this;
-
+		if (RandomSeed)
+			NoiseSettings.Seed = UnityEngine.Random.Range(float.MinValue, float.MaxValue);
 		StartCoroutine(GenerateChunks(10));
 		//GenerateChunks(10);
 

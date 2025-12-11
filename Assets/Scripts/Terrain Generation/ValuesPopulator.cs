@@ -7,6 +7,7 @@ using Unity.Mathematics;
 public struct ValuesPopulator : IJobParallelFor
 {
     [ReadOnly] public ChunkInfo Info;
+    [ReadOnly] public NoiseParamaters NoiseSettings;
     int3 indexToPos(int i)
     {
         int layerSize = (Info.ChunkDimensions.x + 1) * (Info.ChunkDimensions.y + 1);
@@ -66,14 +67,68 @@ public struct ValuesPopulator : IJobParallelFor
         return val + val1;
     }
 
+    float FractalRigidNoise(float3 pos, int numOctaves, float persistence, float lacunarity)
+    {
+        float noiseOut = 0.0f;
+        float frequency = 1.0f;
+        float amplitude = 1.0f;
+        float amplitudeSum = 0.0f;
+        for (int i = 0; i < numOctaves; i++)
+        {
+            amplitudeSum += amplitude;
+            noiseOut += (1 - math.abs(noise.cnoise(pos * frequency))) * amplitude;
+            frequency *= lacunarity;
+            amplitude *= persistence;
+        }
+        return noiseOut / (amplitudeSum);
+    }
+
+     
+
     public void Execute(int i)
     {
-        int3 pos = indexToPos(i) + (int3)Info.PositionOffset;
+        float3 pos = indexToPos(i) + (int3)Info.PositionOffset;
+        var y = pos.y;
+        pos /= 2;
+        pos.y = 120874;
 
-        float height = SmoothedFractalPerlinNoise((float3)(pos + new int3(125678)) / 46.5f, 20, 0.3f, 2.0f, 0.1f, 0.8f) * 32.0f;
-        height += math.pow(FractalPerlinNoise((float3)(pos + new int3(120487)) / 46.5f, 20, 0.3f, 2.0f), 3) * 64.0f;
+        float height = SmoothedFractalPerlinNoise((pos + new float3(125678.5f)) / 46.5f, 4, 0.3f, 2.0f, 0.1f, 0.8f) * 10.0f;
+        height += math.pow(FractalRigidNoise((pos + new float3(125678.5f)) / 250.0f, 20, 0.3f, 2.0f), 3) * 160.0f;
 
-        OutputValues[i] = height - pos.y;
+        OutputValues[i] = height - y;
         //OutputValues[i] = 16 - pos.y;
+    }
+}
+[System.Serializable]
+[BurstCompile(CompileSynchronously = true, OptimizeFor = OptimizeFor.Performance, FloatMode = FloatMode.Fast)]
+public struct NoiseParamaters 
+{
+    public float Seed;
+    public float3 Offset;
+    public float Scale;
+
+    public GeneralNoise GeneralNoiseSettings;
+    public RigidNoise RigidNoiseSettings;
+    [System.Serializable]
+    public struct GeneralNoise 
+    {
+        public float Scale;
+        public float Amplitude;
+        public int Octaves;
+        public float3 Offset;
+        public float Persistence;
+        public float Lacunarity;
+    }
+
+    [System.Serializable]
+    public struct RigidNoise 
+    {
+        public float Scale;
+        public float Amplitude;
+        public int Octaves;
+        public float3 Offset;
+        public float Persistence;
+        public float Lacunarity;
+        public float Power;
     }
 }

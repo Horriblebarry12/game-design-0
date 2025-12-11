@@ -43,7 +43,7 @@ public class TerrainChunk : MonoBehaviour
 			OutputValues = outputValues
 		};
 
-		JobHandle valueJobHandle = valuesGenerator.Schedule((Depth + 1) * (Width + 1) * (Height + 1), 32);
+		JobHandle valueJobHandle = valuesGenerator.Schedule((Depth + 1) * (Width + 1) * (Height + 1), 16);
 
 
         NativeList<float3> outputVerticies = new NativeList<float3>(Depth * Width * Height * 12, Allocator.TempJob);
