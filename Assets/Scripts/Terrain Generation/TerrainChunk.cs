@@ -16,7 +16,6 @@ public class TerrainChunk : MonoBehaviour
 
 	public bool isGenerating = false;
 	public bool isDoneGenerating = false;
-
 	public IEnumerator Generate() 
 	{
 
@@ -29,13 +28,40 @@ public class TerrainChunk : MonoBehaviour
 
 		ChunkInfo info = new ChunkInfo(new int3(Depth, Height, Width), new float3(transform.position.x, transform.position.y, transform.position.z), 0f);
 
+		NativeArray<float> heightMap;
+
+		if (ChunkManager.instance.HeightMaps.ContainsKey(transform.position)) 
+		{
+			heightMap = ChunkManager.instance.HeightMaps[transform.position];
+		}
+		else 
+		{
+			heightMap = new NativeArray<float>((Depth + 1) * (Width + 1), Allocator.Persistent);
+
+
+            var heightMapGenerator = new HeightMapGenerator()
+			{
+				NoiseSettings = ChunkManager.instance.NoiseSettings,
+				Info = info,
+				HeightMaps = heightMap,
+			};
+
+			JobHandle heightMapJobHandle = heightMapGenerator.Schedule((Depth + 1) * (Width + 1), Depth + 1);
+            yield return new WaitUntil(() => { return heightMapJobHandle.IsCompleted; });
+			heightMapJobHandle.Complete();
+
+			ChunkManager.instance.HeightMaps.Add(transform.position, heightMap);
+        }
+
 		var valuesGenerator = new ValuesPopulator()
 		{
 			Info = info,
-			OutputValues = outputValues
+			OutputValues = outputValues,
+			HeightMaps = heightMap,
+			NoiseSettings = ChunkManager.instance.NoiseSettings
 		};
 
-		JobHandle valueJobHandle = valuesGenerator.Schedule((Depth + 1) * (Width + 1) * (Height + 1), 16);
+		JobHandle valueJobHandle = valuesGenerator.Schedule((Depth + 1) * (Width + 1) * (Height + 1), (Depth + 1) * (Width + 1));
 
 
         NativeList<float3> outputVerticies = new NativeList<float3>(Depth * Width * Height * 12, Allocator.Persistent);
@@ -75,7 +101,7 @@ public class TerrainChunk : MonoBehaviour
 		//triangles.RemoveAll((int val) => { return val == -1; });
 
 		mesh.triangles = triangles.ToArray();
-		//mesh.RecalculateNormals();
+		mesh.RecalculateNormals();
 		GetComponent<MeshFilter>().mesh = mesh;
 		GetComponent<MeshRenderer>().material = ChunkManager.instance.worldMaterial;
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Codice.Client.Common;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
@@ -24,7 +25,9 @@ public class ChunkManager : MonoBehaviour
 	public float AverageGenerationTime = 0.0f;
 	
 	bool isGenerating = false;
-	
+
+	public Dictionary<Vector3, NativeArray<float>> HeightMaps = new();
+
 	private IEnumerator GenerateChunks(int radius) 
 	{
 		isGenerating = true;
@@ -39,7 +42,7 @@ public class ChunkManager : MonoBehaviour
 			while (dist < distTravel)
 			{
 				dist++;
-                for (int j= 1; j <= 2; j++)
+                for (int j= -1; j <= 3; j++)
                 {
 					Vector3 actuallPos = new Vector3((x+Mathf.Round((Reference.position.x)/ ChunkSize)) * ChunkSize, (j+Mathf.Round((Reference.position.y)/ ChunkSize)) * ChunkSize, (y + Mathf.Round((Reference.position.z) / ChunkSize)) * ChunkSize);
 					if (AllChunks.ContainsKey(actuallPos))
@@ -102,6 +105,10 @@ public class ChunkManager : MonoBehaviour
 	{
 		edgeTable.Dispose();
 		triTable.Dispose();
+		foreach (var item in HeightMaps.Values)
+		{
+			item.Dispose();
+		}
 	}
 
 	#region Tables
