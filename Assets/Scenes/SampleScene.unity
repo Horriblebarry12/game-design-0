@@ -490,6 +490,63 @@ MonoBehaviour:
   worldMaterial: {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
   MaxGeneratingChunks: 16
   Reference: {fileID: 294779268}
+  RandomSeed: 1
+  NoiseSettings:
+    Seed: 932875
+    Offset:
+      x: 1267
+      y: 12476
+      z: 135347
+    Scale: 0.5
+    GeneralNoiseSettings:
+      Scale: 0
+      Amplitude: 0
+      Octaves: 0
+      Offset:
+        x: 0
+        y: 0
+        z: 0
+      Persistence: 0
+      Lacunarity: 0
+    RigidNoiseSettings:
+      Scale: 0
+      Amplitude: 0
+      Octaves: 0
+      Offset:
+        x: 0
+        y: 0
+        z: 0
+      Persistence: 0
+      Lacunarity: 0
+      Power: 0
+  GlobalNoiseSettings:
+    Seed: 0
+    Offset:
+      x: 0
+      y: 0
+      z: 0
+    Scale: 0
+    GeneralNoiseSettings:
+      Scale: 0
+      Amplitude: 0
+      Octaves: 0
+      Offset:
+        x: 0
+        y: 0
+        z: 0
+      Persistence: 0
+      Lacunarity: 0
+    RigidNoiseSettings:
+      Scale: 0
+      Amplitude: 0
+      Octaves: 0
+      Offset:
+        x: 0
+        y: 0
+        z: 0
+      Persistence: 0
+      Lacunarity: 0
+      Power: 0
   numGenerating: 0
 --- !u!4 &2091354335
 Transform:
