@@ -1,108 +1,148 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.CompilerServices;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
-using UnityEngine;
 
-[RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
-public class TerrainChunk : MonoBehaviour
+[BurstCompile(FloatMode = FloatMode.Fast, OptimizeFor = OptimizeFor.Performance)]
+public unsafe struct MeshGenerator : IJob
 {
-	public int Width;
-	public int Height;
-	public int Depth;
+	[ReadOnly] public ChunkInfo Info;
+	[ReadOnly] public NativeArray<float> InputValues;
+	[ReadOnly] public NativeArray<int> EdgeTable;
+	[ReadOnly] public NativeArray<int> TriTable;
 
-	public bool isGenerating = false;
-	public bool isDoneGenerating = false;
+	public NativeList<float3> OutputVerticies;
+	public NativeList<int> OutputTriangles;
 
-	public IEnumerator Generate() 
+	int strideX;
+	int strideXY;
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	int posToIndex(int3 p) => p.z * strideXY + p.y * strideX + p.x;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	static float3 VertexInterpolate(float3 p1, float3 p2, float v1, float v2, float threshold)
 	{
-
-		float startTime = Time.realtimeSinceStartup;
-
-		isGenerating = true;
-		ChunkManager.instance.NumGenerating++;
-		
-        NativeArray<float> outputValues = new NativeArray<float>((Depth + 1)*(Width + 1)*(Height + 1), Allocator.Persistent);
-
-		ChunkInfo info = new ChunkInfo(new int3(Depth, Height, Width), new float3(transform.position.x, transform.position.y, transform.position.z), 0f);
-
-		var valuesGenerator = new ValuesPopulator()
-		{
-			Info = info,
-			OutputValues = outputValues
-		};
-
-		JobHandle valueJobHandle = valuesGenerator.Schedule((Depth + 1) * (Width + 1) * (Height + 1), 16);
-
-
-        NativeList<float3> outputVerticies = new NativeList<float3>(Depth * Width * Height * 12, Allocator.Persistent);
-		NativeList<int> outputTriangles = new NativeList<int>(Depth * Width * Height * 3, Allocator.Persistent);
-
-		var meshGenerator = new MeshGenerator()
-		{
-			Info = info,
-			InputValues = outputValues,
-			OutputTriangles = outputTriangles,
-			OutputVerticies = outputVerticies,
-			TriTable = ChunkManager.triTable,
-			EdgeTable = ChunkManager.edgeTable,
-		};
-		//meshGenerator.Run();
-		
-
-		JobHandle meshJobHandle = meshGenerator.Schedule(valueJobHandle);
-
-		yield return new WaitUntil(() => { return meshJobHandle.IsCompleted; });
-		meshJobHandle.Complete();
-		outputValues.Dispose();
-		float3[] verts = outputVerticies.AsArray().ToArray();
-		outputVerticies.Dispose();
-		List<int> triangles = new List<int>(outputTriangles.AsArray());
-		outputTriangles.Dispose();
-		Mesh mesh = new Mesh();
-		Vector3[] vertsVectors = new Vector3[verts.Length];
-		for (int i = 0; i < verts.Length; i++)
-		{
-			vertsVectors[i] = new Vector3(verts[i].x, verts[i].y, verts[i].z);
-		}
-		
-		mesh.vertices = vertsVectors;
-
-
-		//triangles.RemoveAll((int val) => { return val == -1; });
-
-		mesh.triangles = triangles.ToArray();
-		//mesh.RecalculateNormals();
-		GetComponent<MeshFilter>().mesh = mesh;
-		GetComponent<MeshRenderer>().material = ChunkManager.instance.worldMaterial;
-
-
-
-		isGenerating = false;
-		isDoneGenerating = true;
-        ChunkManager.instance.NumGenerating--;
-
-		float endTime = Time.realtimeSinceStartup;
-		float deltaTime = endTime - startTime;
-		ChunkManager.instance.GenerationTimes.Add(deltaTime);
-    }
-    public void StartGenerating()
-    {
-		StartCoroutine(Generate());
-    }
-    private void OnDrawGizmos()
-	{
-		Gizmos.color = Color.white;
-		if (isGenerating)
-			Gizmos.color = Color.green;
-		if (isDoneGenerating)
-			Gizmos.color = Color.cyan;
-		Gizmos.DrawWireCube(new Vector3(Width, Height, Depth) / 2 + transform.position, new Vector3(Width, Height, Depth));
+		float t = (threshold - v1) / (v2 - v1);
+		return math.lerp(p1, p2, t);
 	}
 
+	int AddVertex(float3 pos) 
+	{
+		for (int i = 0; i < OutputVerticies.Length; i++)
+		{
+			bool3 isEqual = OutputVerticies[i] == pos;
+			if (isEqual.x && isEqual.y && isEqual.z) 
+			{
+				return i;
+			}
+		}
+		OutputVerticies.Add(pos);
+		return OutputVerticies.Length - 1;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void generateCube(int3 position) 
+	{
+
+		int3 pos = position;
+		int3 pos1 = new int3(pos.x + 1, pos.y, pos.z);
+		int3 pos2 = new int3(pos.x + 1, pos.y + 1, pos.z);
+		int3 pos3 = new int3(pos.x, pos.y + 1, pos.z);
+		int3 pos4 = new int3(pos.x, pos.y, pos.z + 1);
+		int3 pos5 = new int3(pos.x + 1, pos.y, pos.z + 1);
+		int3 pos6 = new int3(pos.x + 1, pos.y + 1, pos.z + 1);
+		int3 pos7 = new int3(pos.x, pos.y + 1, pos.z + 1);
+
+
+		int baseIndex = pos.z * strideXY + pos.y * strideX + pos.x;
+
+		int i0 = baseIndex;
+		int i1 = baseIndex + 1;
+		int i3 = baseIndex + strideX;
+		int i2 = i3 + 1;
+
+		int i4 = baseIndex + strideXY;
+		int i5 = i4 + 1;
+		int i7 = i4 + strideX;
+		int i6 = i7 + 1;
+
+		int cubeIndex = 0;
+		if (InputValues[i0] < Info.Threshold) cubeIndex |= 1;
+		if (InputValues[i1] < Info.Threshold) cubeIndex |= 2;
+		if (InputValues[i2] < Info.Threshold) cubeIndex |= 4;
+		if (InputValues[i3] < Info.Threshold) cubeIndex |= 8;
+		if (InputValues[i4] < Info.Threshold) cubeIndex |= 16;
+		if (InputValues[i5] < Info.Threshold) cubeIndex |= 32;
+		if (InputValues[i6] < Info.Threshold) cubeIndex |= 64;
+		if (InputValues[i7] < Info.Threshold) cubeIndex |= 128;
+		if (cubeIndex == 0 || cubeIndex == 255)
+			return;
+		int edges = EdgeTable[cubeIndex];
+		if (edges == 0)
+			return;
+
+		float3* edgeVertex = stackalloc float3[12];
+
+		if ((edges & 1) != 0)
+			edgeVertex[0] = VertexInterpolate(pos, pos1, InputValues[i0], InputValues[i1], Info.Threshold);
+		if ((edges & 2) != 0)
+			edgeVertex[1] = VertexInterpolate(pos1, pos2, InputValues[i1], InputValues[i2], Info.Threshold);
+		if ((edges & 4) != 0)
+			edgeVertex[2] = VertexInterpolate(pos2, pos3, InputValues[i2], InputValues[i3], Info.Threshold);
+		if ((edges & 8) != 0)
+			edgeVertex[3] = VertexInterpolate(pos3, pos, InputValues[i3], InputValues[i0], Info.Threshold);
+		if ((edges & 16) != 0)
+			edgeVertex[4] = VertexInterpolate(pos4, pos5, InputValues[i4], InputValues[i5], Info.Threshold);
+		if ((edges & 32) != 0)
+			edgeVertex[5] = VertexInterpolate(pos5, pos6, InputValues[i5], InputValues[i6], Info.Threshold);
+		if ((edges & 64) != 0)
+			edgeVertex[6] = VertexInterpolate(pos6, pos7, InputValues[i6], InputValues[i7], Info.Threshold);
+		if ((edges & 128) != 0)
+			edgeVertex[7] = VertexInterpolate(pos7, pos4, InputValues[i7], InputValues[i4], Info.Threshold);
+		if ((edges & 256) != 0)
+			edgeVertex[8] = VertexInterpolate(pos, pos4, InputValues[i0], InputValues[i4], Info.Threshold);
+		if ((edges & 512) != 0)
+			edgeVertex[9] = VertexInterpolate(pos1, pos5, InputValues[i1], InputValues[i5], Info.Threshold);
+		if ((edges & 1024) != 0)
+			edgeVertex[10] = VertexInterpolate(pos2, pos6, InputValues[i2], InputValues[i6], Info.Threshold);
+		if ((edges & 2048) != 0)
+			edgeVertex[11] = VertexInterpolate(pos3, pos7, InputValues[i3], InputValues[i7], Info.Threshold);
+
+
+		for (int i = 0; TriTable[cubeIndex * 16 + i] != -1; i += 3)
+		{
+			baseIndex = cubeIndex * 16 + i;
+			int a = TriTable[baseIndex];
+			int b = TriTable[baseIndex + 1];
+			int c = TriTable[baseIndex + 2];
+
+			OutputTriangles.Add(AddVertex(edgeVertex[a]));
+			OutputTriangles.Add(AddVertex(edgeVertex[b]));
+			OutputTriangles.Add(AddVertex(edgeVertex[c]));
+			baseIndex = OutputVerticies.Length;
+
+		}
+
+	}
+
+	public void Execute()
+	{
+		strideX = Info.ChunkDimensions.x + 1;
+		strideXY = strideX * (Info.ChunkDimensions.y + 1);
+
+		for (int i = 0; i < Info.ChunkDimensions.x; i++)
+		{
+			for (int j = 0; j < Info.ChunkDimensions.y; j++)
+			{
+				for (int k = 0; k < Info.ChunkDimensions.z; k++)
+				{
+					generateCube(new int3(i, j, k));
+				}
+			}
+		}
+		
+	}
 }
 
 /*
