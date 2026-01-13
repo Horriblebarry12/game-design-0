@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Codice.Client.Common;
 using Unity.Collections;
+using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -18,96 +19,178 @@ public class ChunkManager : MonoBehaviour
 	public static ChunkManager instance;
 	[Space]
 	[Header("Global References")]
-	public NoiseParamaters GlobalNoiseSettings;
-	public int NumGenerating = 0;
-	public Dictionary<Vector3, TerrainChunk> AllChunks = new Dictionary<Vector3, TerrainChunk>();
-	public List<float> GenerationTimes = new List<float>();
-	public float AverageGenerationTime = 0.0f;
-	
-	bool isGenerating = false;
+	[HideInInspector] public NoiseParamaters GlobalNoiseSettings;
+	[HideInInspector] public int NumGenerating = 0;
+	[HideInInspector] public Dictionary<Vector3, TerrainChunk> AllChunks = new Dictionary<Vector3, TerrainChunk>();
+	[HideInInspector] public struct HeightMap { public NativeArray<float> Map; public float Max; public float Min; }
+	[HideInInspector] public Dictionary<Vector2, HeightMap> HeightMaps = new();
+	[HideInInspector] public List<JobHandle> DepthJobHandles = new List<JobHandle>();
+	[HideInInspector] public List<JobHandle> MeshJobHandles = new List<JobHandle>();
 
-	public Dictionary<Vector3, NativeArray<float>> HeightMaps = new();
+	bool IsGenerating = false;
+
+	private IEnumerator GenerateVertical(float x, float y)
+	{
+		TerrainChunk bottomChunk = null;
+		for (int j = -1; j <= 5; j++) 
+		{
+			float ChunkSize = 32.0f;
+			Vector3 actuallPos = new Vector3((x + Mathf.Round((Reference.position.x) / ChunkSize)) * ChunkSize, (j + Mathf.Round((Reference.position.y) / ChunkSize)) * ChunkSize, (y + Mathf.Round((Reference.position.z) / ChunkSize)) * ChunkSize);
+			if (!AllChunks.ContainsKey(actuallPos))
+			{
+				if (bottomChunk != null ? !bottomChunk.isDoneGenerating : false)
+					yield return new WaitUntil(() => { return bottomChunk.isDoneGenerating; });
+				if (NumGenerating > MaxGeneratingChunks)
+					yield return new WaitUntil(() => { return NumGenerating <= MaxGeneratingChunks; });
+				GameObject obj = new GameObject(x + " " + y);
+				obj.transform.parent = transform;
+				obj.transform.position = actuallPos;
+				TerrainChunk chunk = obj.AddComponent<TerrainChunk>();
+				chunk.Depth = (int)ChunkSize;
+				chunk.Height = (int)ChunkSize;
+				chunk.Width = (int)ChunkSize;
+				AllChunks.Add(actuallPos, chunk);
+				chunk.StartGenerating();
+				if (bottomChunk == null)
+					bottomChunk = chunk;
+			}
+
+		}
+	}
 
 	private IEnumerator GenerateChunks(int radius) 
 	{
-		isGenerating = true;
-		float x = 0.0f, y = 0.0f;
-		float ChunkSize = 64.0f;
-		float dist = 0.0f, xDir = 0.0f, yDir = 0.0f;
-		float distTravel = 1.0f;
-		int timeTraveled = 0;
-		xDir = 1.0f;
-		while (x < radius && y < radius) 
+		IsGenerating = true;
+		
 		{
-			while (dist < distTravel)
+			float x = 0.0f, y = 0.0f;
+			float dist = 0.0f, xDir = 0.0f, yDir = 0.0f;
+			float distTravel = 1.0f;
+			int timeTraveled = 0;
+			xDir = 1.0f;
+			while (x < radius && y < radius) 
 			{
-				dist++;
-                for (int j= -1; j <= 3; j++)
-                {
-					Vector3 actuallPos = new Vector3((x+Mathf.Round((Reference.position.x)/ ChunkSize)) * ChunkSize, (j+Mathf.Round((Reference.position.y)/ ChunkSize)) * ChunkSize, (y + Mathf.Round((Reference.position.z) / ChunkSize)) * ChunkSize);
-					if (AllChunks.ContainsKey(actuallPos))
-						continue;
+				while (dist < distTravel)
+				{
+					dist++;
 					if (NumGenerating > MaxGeneratingChunks)
-						yield return new WaitUntil(() => { return NumGenerating < MaxGeneratingChunks; });
-                    GameObject obj = new GameObject(x + " " + y);
-                    obj.transform.position = actuallPos;
-                    TerrainChunk chunk = obj.AddComponent<TerrainChunk>();
-                    chunk.Depth = (int)ChunkSize;
-                    chunk.Height = (int)ChunkSize;
-                    chunk.Width = (int)ChunkSize;
-					AllChunks.Add(actuallPos, chunk);
-					chunk.StartGenerating();
-                }
-				x += xDir;
-				y += yDir;
+						yield return new WaitUntil(() => { return NumGenerating <= MaxGeneratingChunks - 1; });
+					StartCoroutine(GenerateVertical(x, y));
+					
+					x += xDir;
+					y += yDir;
 
-			}
-			timeTraveled++;
-			dist = 0;
-			var temp = xDir;
-			xDir = -yDir;
-			yDir = temp;
-			if (timeTraveled == 2) 
-			{
-				distTravel++;
-				timeTraveled = 0;
+				}
+				timeTraveled++;
+				dist = 0;
+				var temp = xDir;
+				xDir = -yDir;
+				yDir = temp;
+				if (timeTraveled == 2) 
+				{
+					distTravel++;
+					timeTraveled = 0;
+				}
 			}
 		}
-		isGenerating = false;
+		IsGenerating = false;
 	}
 
+	private IEnumerator GenerateChunksProgressivly(int radius)
+	{
+		IsGenerating = true;
+
+		for (int i = 0; i < radius; i++)
+		{
+			yield return GenerateChunksRecursiveProgressivly(radius);
+		}
+		IsGenerating = false;
+	}
+	private IEnumerator GenerateChunksRecursiveProgressivly(int radius)
+	{
+		if (radius == 0)
+		{
+			if (NumGenerating > MaxGeneratingChunks)
+				yield return new WaitUntil(() => { return NumGenerating <= MaxGeneratingChunks - 1; });
+			StartCoroutine(GenerateVertical(0, 0));
+			yield break;
+		}
+
+		yield return GenerateChunksRecursiveProgressivly(radius - 1);
+
+		{
+			float x = 0.0f, y = 0.0f;
+
+			x = radius;
+			for (int j = -radius; j <= radius; j++)
+			{
+				if (NumGenerating > MaxGeneratingChunks)
+					yield return new WaitUntil(() => { return NumGenerating <= MaxGeneratingChunks - 1; });
+				StartCoroutine(GenerateVertical(x, j));
+			}
+			y = radius;
+			for (int i = radius - 1; i >= -radius + 1; i--)
+			{
+				if (NumGenerating > MaxGeneratingChunks)
+					yield return new WaitUntil(() => { return NumGenerating <= MaxGeneratingChunks - 1; });
+				StartCoroutine(GenerateVertical(i, y));
+			}
+			x = -radius;
+			for (int j = radius; j >= -radius; j--)
+			{
+				if (NumGenerating > MaxGeneratingChunks)
+					yield return new WaitUntil(() => { return NumGenerating <= MaxGeneratingChunks - 1; });
+				StartCoroutine(GenerateVertical(x, j));
+			}
+			y = -radius;
+			for (int i = -radius + 1; i < radius; i++)
+			{
+				if (NumGenerating > MaxGeneratingChunks)
+					yield return new WaitUntil(() => { return NumGenerating <= MaxGeneratingChunks - 1; });
+				StartCoroutine(GenerateVertical(i, y));
+			}
+			
+		}
+	}
 	private void Start()
 	{
-		
+		QualitySettings.vSyncCount = 0;
+
+		MaxGeneratingChunks = SystemInfo.processorCount * 2;
 
 		instance = this;
 		if (RandomSeed)
 			NoiseSettings.Seed = UnityEngine.Random.Range(float.MinValue, float.MaxValue);
-		StartCoroutine(GenerateChunks(10));
+		GlobalNoiseSettings = NoiseSettings;
+		StartCoroutine(GenerateChunksProgressivly(10));
 		//GenerateChunks(10);
 
-    }
+	}
 
 	private void Update()
 	{
-		if (!isGenerating)
-			StartCoroutine(GenerateChunks(10));
-		//GenerateChunks(10);
-		AverageGenerationTime = 0.0f;
-		foreach (var item in GenerationTimes)
-		{
-			AverageGenerationTime += item;
-		}
-		AverageGenerationTime /= GenerationTimes.Count;
-    }
+		if (!IsGenerating)
+			StartCoroutine(GenerateChunksProgressivly(10));
+
+	}
 
 	private void OnDestroy()
 	{
-		edgeTable.Dispose();
-		triTable.Dispose();
+		JobHandle MeshJobs = new JobHandle();
+		foreach (var item in MeshJobHandles)
+		{
+			MeshJobs = JobHandle.CombineDependencies(item, MeshJobs);
+		}
+		edgeTable.Dispose(MeshJobs);
+		triTable.Dispose(MeshJobs);
+		JobHandle DepthJobs = new JobHandle();
+		foreach (var item in DepthJobHandles)
+		{
+			DepthJobs = JobHandle.CombineDependencies(item, DepthJobs);
+		}
 		foreach (var item in HeightMaps.Values)
 		{
-			item.Dispose();
+			item.Map.Dispose(DepthJobs);
 		}
 	}
 

@@ -24,15 +24,25 @@ public class TerrainChunk : MonoBehaviour
 		isGenerating = true;
 		ChunkManager.instance.NumGenerating++;
 		
-        NativeArray<float> outputValues = new NativeArray<float>((Depth + 1)*(Width + 1)*(Height + 1), Allocator.Persistent);
+        NativeArray<float> outputDepths = new NativeArray<float>((Depth + 1)*(Width + 1)*(Height + 1), Allocator.Persistent);
 
 		ChunkInfo info = new ChunkInfo(new int3(Depth, Height, Width), new float3(transform.position.x, transform.position.y, transform.position.z), 0f);
 
 		NativeArray<float> heightMap;
 
-		if (ChunkManager.instance.HeightMaps.ContainsKey(transform.position)) 
+		Vector2 XZPos = new Vector2(transform.position.x, transform.position.z);
+
+		if (ChunkManager.instance.HeightMaps.ContainsKey(XZPos)) 
 		{
-			heightMap = ChunkManager.instance.HeightMaps[transform.position];
+			if (ChunkManager.instance.HeightMaps[XZPos].Max < transform.position.y || ChunkManager.instance.HeightMaps[XZPos].Min > transform.position.y + Height) 
+			{
+				outputDepths.Dispose();
+				isGenerating = false;
+				isDoneGenerating = true;
+				ChunkManager.instance.NumGenerating--;
+				yield break;
+			}
+			heightMap = ChunkManager.instance.HeightMaps[XZPos].Map;
 		}
 		else 
 		{
@@ -49,59 +59,76 @@ public class TerrainChunk : MonoBehaviour
 			JobHandle heightMapJobHandle = heightMapGenerator.Schedule((Depth + 1) * (Width + 1), Depth + 1);
             yield return new WaitUntil(() => { return heightMapJobHandle.IsCompleted; });
 			heightMapJobHandle.Complete();
+			ChunkManager.instance.HeightMaps.Add(XZPos, new ChunkManager.HeightMap() { Map = heightMap, Max = heightMap.Max(), Min = heightMap.Min() });
+			if (ChunkManager.instance.HeightMaps[XZPos].Max < transform.position.y || ChunkManager.instance.HeightMaps[XZPos].Min > transform.position.y + Height)
+			{
+				outputDepths.Dispose();
+				isGenerating = false;
+				isDoneGenerating = true;
+				ChunkManager.instance.NumGenerating--;
+				yield break;
+			}
+		}
 
-			ChunkManager.instance.HeightMaps.Add(transform.position, heightMap);
-        }
-
-		var valuesGenerator = new ValuesPopulator()
+		var DepthGenerator = new DepthGenerator()
 		{
 			Info = info,
-			OutputValues = outputValues,
+			OutputDepths = outputDepths,
 			HeightMaps = heightMap,
 			NoiseSettings = ChunkManager.instance.NoiseSettings
 		};
 
-		JobHandle valueJobHandle = valuesGenerator.Schedule((Depth + 1) * (Width + 1) * (Height + 1), (Depth + 1) * (Width + 1));
+		JobHandle DepthJobHandle = DepthGenerator.Schedule((Depth + 1) * (Width + 1) * (Height + 1), (Depth + 1) * (Width + 1));
 
-
+		ChunkManager.instance.DepthJobHandles.Add(DepthJobHandle);
         NativeList<float3> outputVerticies = new NativeList<float3>(Depth * Width * Height * 12, Allocator.Persistent);
 		NativeList<int> outputTriangles = new NativeList<int>(Depth * Width * Height * 3, Allocator.Persistent);
-
+		NativeList<float3> outputNormals = new NativeList<float3>(Depth * Width * Height * 12, Allocator.Persistent);
+		Bounds meshBounds = new Bounds();
 		var meshGenerator = new MeshGenerator()
 		{
 			Info = info,
-			InputValues = outputValues,
+			InputValues = outputDepths,
 			OutputTriangles = outputTriangles,
 			OutputVerticies = outputVerticies,
+			OutputNormals = outputNormals,
+			MeshBounds = meshBounds,
 			TriTable = ChunkManager.triTable,
 			EdgeTable = ChunkManager.edgeTable,
 		};
 		//meshGenerator.Run();
 		
-
-		JobHandle meshJobHandle = meshGenerator.Schedule(valueJobHandle);
+		JobHandle meshJobHandle = meshGenerator.Schedule(DepthJobHandle);
+		ChunkManager.instance.MeshJobHandles.Add(meshJobHandle);
 
 		yield return new WaitUntil(() => { return meshJobHandle.IsCompleted; });
 		meshJobHandle.Complete();
-		outputValues.Dispose();
-		float3[] verts = outputVerticies.AsArray().ToArray();
-		outputVerticies.Dispose();
+		ChunkManager.instance.MeshJobHandles.Remove(meshJobHandle);
+		ChunkManager.instance.DepthJobHandles.Remove(DepthJobHandle);
+		outputDepths.Dispose();
+		//float3[] verts = outputVerticies.AsArray().ToArray();
 		List<int> triangles = new List<int>(outputTriangles.AsArray());
 		outputTriangles.Dispose();
 		Mesh mesh = new Mesh();
-		Vector3[] vertsVectors = new Vector3[verts.Length];
-		for (int i = 0; i < verts.Length; i++)
+		Vector3[] vertsVectors = new Vector3[outputVerticies.Length];
+		for (int i = 0; i < outputVerticies.Length; i++)
 		{
-			vertsVectors[i] = new Vector3(verts[i].x, verts[i].y, verts[i].z);
+			vertsVectors[i] = new Vector3(outputVerticies[i].x, outputVerticies[i].y, outputVerticies[i].z);
 		}
-		
+		outputVerticies.Dispose();
+		Vector3[] vertsNormals = new Vector3[outputNormals.Length];
+		for (int i = 0; i < outputNormals.Length; i++)
+		{
+			vertsNormals[i] = new Vector3(outputNormals[i].x, outputNormals[i].y, outputNormals[i].z);
+		}
+		outputNormals.Dispose();
 		mesh.vertices = vertsVectors;
-
-
+		mesh.normals = vertsNormals;
+		mesh.bounds = meshBounds;
 		//triangles.RemoveAll((int val) => { return val == -1; });
 
 		mesh.triangles = triangles.ToArray();
-		mesh.RecalculateNormals();
+		
 		GetComponent<MeshFilter>().mesh = mesh;
 		GetComponent<MeshRenderer>().material = ChunkManager.instance.worldMaterial;
 
@@ -113,7 +140,7 @@ public class TerrainChunk : MonoBehaviour
 
 		float endTime = Time.realtimeSinceStartup;
 		float deltaTime = endTime - startTime;
-		ChunkManager.instance.GenerationTimes.Add(deltaTime);
+		//ChunkManager.instance.GenerationTimes.Add(deltaTime);
     }
     public void StartGenerating()
     {
@@ -126,6 +153,8 @@ public class TerrainChunk : MonoBehaviour
 			Gizmos.color = Color.green;
 		if (isDoneGenerating)
 			Gizmos.color = Color.cyan;
+		if (GetComponent<MeshFilter>().mesh.vertexCount == 0 && isDoneGenerating)
+			Gizmos.color = new Color(Color.gray.r, Color.gray.g, Color.gray.b, 0.2f);
 		Gizmos.DrawWireCube(new Vector3(Width, Height, Depth) / 2 + transform.position, new Vector3(Width, Height, Depth));
 	}
 

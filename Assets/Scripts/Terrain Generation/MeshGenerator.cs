@@ -3,6 +3,7 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
+using UnityEngine;
 
 [BurstCompile(FloatMode = FloatMode.Fast, OptimizeFor = OptimizeFor.Performance)]
 public unsafe struct MeshGenerator : IJob
@@ -14,6 +15,10 @@ public unsafe struct MeshGenerator : IJob
 
 	public NativeList<float3> OutputVerticies;
 	public NativeList<int> OutputTriangles;
+	public NativeList<float3> OutputNormals;
+	//public NativeList<float4> OutputTangents;
+	//public NativeList<float2> OutputUVs;
+	public Bounds MeshBounds;
 
 	int strideX;
 	int strideXY;
@@ -37,7 +42,10 @@ public unsafe struct MeshGenerator : IJob
 				return i;
 			}
 		}
+		MeshBounds.Encapsulate(pos);
 		OutputVerticies.Add(pos);
+		OutputNormals.Add(float3.zero);
+
 		return OutputVerticies.Length - 1;
 	}
 
@@ -117,9 +125,23 @@ public unsafe struct MeshGenerator : IJob
 			int b = TriTable[baseIndex + 1];
 			int c = TriTable[baseIndex + 2];
 
-			OutputTriangles.Add(AddVertex(edgeVertex[a]));
-			OutputTriangles.Add(AddVertex(edgeVertex[b]));
-			OutputTriangles.Add(AddVertex(edgeVertex[c]));
+
+			int iA = AddVertex(edgeVertex[a]);
+			int iB = AddVertex(edgeVertex[b]);
+			int iC = AddVertex(edgeVertex[c]);
+
+			OutputTriangles.Add(iA);
+			OutputTriangles.Add(iB);
+			OutputTriangles.Add(iC);
+
+			// triangle normal
+			float3 normal = math.normalize(math.cross(edgeVertex[b] - edgeVertex[a], edgeVertex[c] - edgeVertex[a]));
+
+			// accumulate
+			OutputNormals[iA] += normal;
+			OutputNormals[iB] += normal;
+			OutputNormals[iC] += normal;
+
 			baseIndex = OutputVerticies.Length;
 
 		}
@@ -141,7 +163,11 @@ public unsafe struct MeshGenerator : IJob
 				}
 			}
 		}
-		
+
+		for (int i = 0; i < OutputNormals.Length; i++)
+		{
+			OutputNormals[i] = math.normalize(OutputNormals[i]);
+		}
 	}
 }
 

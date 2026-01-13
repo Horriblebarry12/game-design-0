@@ -18,7 +18,8 @@ public struct HeightMapGenerator : IJobParallelFor
 	public void Execute(int i) 
 	{
 		float2 pos = getPos(i) + (int2)Info.PositionOffset.xz;
-
-		HeightMaps[i] = math.pow(Noise.FractalRigidNoise((new float3(pos.x, 1256712, pos.y) + new float3(125678.5f)) / 250.0f, 3, 0.3f, 2.0f), 3) * 160.0f;
+		pos += NoiseSettings.Offset.xz;
+		HeightMaps[i] = Noise.SmoothedFractalPerlinNoise((new float3(pos.x, NoiseSettings.Seed, pos.y) + NoiseSettings.GeneralNoiseSettings.Offset) * NoiseSettings.GeneralNoiseSettings.Frequency, NoiseSettings.GeneralNoiseSettings.Octaves, NoiseSettings.GeneralNoiseSettings.Persistence, NoiseSettings.GeneralNoiseSettings.Lacunarity, NoiseSettings.GeneralNoiseSettings.SmoothingOffset, NoiseSettings.GeneralNoiseSettings.Smoothing) * 10.0f;
+		HeightMaps[i] += math.pow(Noise.FractalRigidNoise((new float3(pos.x, NoiseSettings.Seed, pos.y) + NoiseSettings.Offset) / 250.0f, 3, 0.3f, 2.0f), 3) * 160.0f;
     }
 }

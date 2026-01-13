@@ -23,14 +23,14 @@ public struct Noise
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static float SmoothedFractalPerlinNoise(float3 pos, int numOctaves, float persistence, float lacunarity, float offset, float smoothing)
+	public static float SmoothedFractalPerlinNoise(float3 pos, int numOctaves, float persistence, float lacunarity, float3 offset, float smoothing)
 	{
-		float3 pos1 = pos + new float3(offset, 0, 0);
-		float3 pos2 = pos + new float3(0, offset, 0);
-		float3 pos3 = pos + new float3(0, 0, offset);
-		float3 pos4 = pos + new float3(-offset, 0, 0);
-		float3 pos5 = pos + new float3(0, -offset, 0);
-		float3 pos6 = pos + new float3(0, 0, -offset);
+		float3 pos1 = pos + new float3(offset.x, 0, 0);
+		float3 pos2 = pos + new float3(0, offset.y, 0);
+		float3 pos3 = pos + new float3(0, 0, offset.z);
+		float3 pos4 = pos + new float3(-offset.x, 0, 0);
+		float3 pos5 = pos + new float3(0, -offset.y, 0);
+		float3 pos6 = pos + new float3(0, 0, -offset.z);
 
 		float val = FractalPerlinNoise(pos, numOctaves, persistence, lacunarity) * smoothing;
 		float val1 = FractalPerlinNoise(pos + pos1, numOctaves, persistence, lacunarity);
@@ -41,7 +41,7 @@ public struct Noise
 		val1 += FractalPerlinNoise(pos + pos6, numOctaves, persistence, lacunarity);
 
 		val1 /= 4;
-		val1 *= 1 / smoothing;
+		val1 *= 1 - smoothing;
 
 		return val + val1;
 	}

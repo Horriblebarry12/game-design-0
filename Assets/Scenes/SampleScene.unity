@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.18028346, g: 0.22571373, b: 0.30692244, a: 1}
+  m_IndirectSpecularColor: {r: 0.18028352, g: 0.22571376, b: 0.3069224, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -488,68 +488,80 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   worldMaterial: {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
-  MaxGeneratingChunks: 8
+  MaxGeneratingChunks: 2
   Reference: {fileID: 294779268}
   RandomSeed: 0
   NoiseSettings:
-    Seed: 0
+    Seed: 347714
     Offset:
-      x: 0
-      y: 0
-      z: 0
-    Scale: 0
+      x: -65.82
+      y: 55.89
+      z: -44.35
+    Scale: 1
     GeneralNoiseSettings:
-      Scale: 0
-      Amplitude: 0
-      Octaves: 0
+      Scale: 1
+      Frequency: 0.01
+      Amplitude: 14
+      Octaves: 3
       Offset:
+        x: 12136
+        y: 683
+        z: 4237
+      Persistence: 0.3
+      Lacunarity: 2
+      SmoothingOffset:
         x: 0
         y: 0
         z: 0
-      Persistence: 0
-      Lacunarity: 0
+      Smoothing: 0.8
     RigidNoiseSettings:
-      Scale: 0
-      Amplitude: 0
-      Octaves: 0
+      Scale: 1
+      Frequency: 0.01
+      Amplitude: 32
+      Octaves: 2
       Offset:
-        x: 0
-        y: 0
-        z: 0
-      Persistence: 0
-      Lacunarity: 0
-      Power: 0
+        x: 9563
+        y: 3472
+        z: 8543
+      Persistence: 0.3
+      Lacunarity: 2
+      Power: 2
   GlobalNoiseSettings:
-    Seed: 0
+    Seed: 347714
     Offset:
-      x: 0
-      y: 0
-      z: 0
-    Scale: 0
+      x: -65.82
+      y: 55.89
+      z: -44.35
+    Scale: 1
     GeneralNoiseSettings:
-      Scale: 0
-      Amplitude: 0
-      Octaves: 0
+      Scale: 1
+      Frequency: 0
+      Amplitude: 14
+      Octaves: 3
       Offset:
+        x: 12136
+        y: 683
+        z: 4237
+      Persistence: 0.3
+      Lacunarity: 2
+      SmoothingOffset:
         x: 0
         y: 0
         z: 0
-      Persistence: 0
-      Lacunarity: 0
+      Smoothing: 0.8
     RigidNoiseSettings:
-      Scale: 0
-      Amplitude: 0
-      Octaves: 0
+      Scale: 1
+      Frequency: 0
+      Amplitude: 32
+      Octaves: 2
       Offset:
-        x: 0
-        y: 0
-        z: 0
-      Persistence: 0
-      Lacunarity: 0
-      Power: 0
+        x: 9563
+        y: 3472
+        z: 8543
+      Persistence: 0.3
+      Lacunarity: 2
+      Power: 2
   NumGenerating: 0
-  GenerationTimes: []
-  AverageGenerationTime: 0
 --- !u!4 &2091354335
 Transform:
   m_ObjectHideFlags: 0
